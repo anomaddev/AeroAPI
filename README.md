@@ -49,7 +49,7 @@ The Swift reference is the Jazzy site in `docs/`. The HTTP contract both clients
 
 - Source: `docs/http/openapi.yaml`
 - Local page: `docs/http/index.html`
-- GitHub Pages: [https://anomaddev.github.io/aeroapi-swift/http/](https://anomaddev.github.io/aeroapi-swift/http/)
+- GitHub Pages: [https://anomaddev.github.io/AeroAPI/http/](https://anomaddev.github.io/AeroAPI/http/)
 
 Pages publishes the whole `docs/` directory from GitHub Actions (`.github/workflows/pages.yml`). In the repository settings, set Pages source to **GitHub Actions** once. The workflow cannot turn that setting on.
 

@@ -24,7 +24,7 @@ The sample app is in `apps/ios-demo`.
 
 ## Supported endpoints
 
-Request and response fields for these paths are in the Redoc page at `docs/http/index.html`, published to [https://anomaddev.github.io/aeroapi-swift/http/](https://anomaddev.github.io/aeroapi-swift/http/).
+Request and response fields for these paths are in the Redoc page at `docs/http/index.html`, published to [https://anomaddev.github.io/AeroAPI/http/](https://anomaddev.github.io/AeroAPI/http/).
 
 ### Flights
 
