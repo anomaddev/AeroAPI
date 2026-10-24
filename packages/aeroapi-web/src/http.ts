@@ -1,4 +1,4 @@
-import { AeroAPIError } from "./errors.js";
+import { AeroErrors } from "./errors.js";
 
 export const DEFAULT_BASE_URL = "https://aeroapi.flightaware.com/aeroapi";
 
@@ -73,9 +73,7 @@ export async function send<T>(
   path: string,
   query?: Query,
 ): Promise<T> {
-  if (!apiKey) {
-    throw new AeroAPIError("No API key set for the AeroAPI module.", { code: "apiKeyNotSet" });
-  }
+  if (!apiKey) throw AeroErrors.apiKeyNotSet();
 
   const url = `${baseUrl.replace(/\/$/, "")}${path}${encodeQuery(query)}`;
   let response: TransportResponse;
@@ -89,33 +87,22 @@ export async function send<T>(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network request failed";
-    throw new AeroAPIError(message, { code: "network" });
+    throw AeroErrors.network(message);
   }
 
   const body = await response.text();
   if (!response.ok) {
-    throw new AeroAPIError(`HTTP Response Error Code: ${response.status}`, {
-      code: "HTTPResponseError",
-      status: response.status,
-      body,
-    });
+    throw AeroErrors.http(response.status, body);
   }
   if (!body) {
-    throw new AeroAPIError("The HTTP Response was 200 but we did not return any data.", {
-      code: "noDataReturnedForValidStatusCode",
-      status: response.status,
-    });
+    throw AeroErrors.noData(response.status);
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
   } catch {
-    throw new AeroAPIError("Failed to decode the JSON response.", {
-      code: "invalidJSON",
-      status: response.status,
-      body,
-    });
+    throw AeroErrors.invalidJSON(response.status, body);
   }
   return camelize<T>(parsed);
 }

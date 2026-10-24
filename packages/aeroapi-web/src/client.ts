@@ -1,362 +1,373 @@
-import { AeroAPIError } from "./errors.js";
+import { loadReferenceCache, mergeAircraft, mergeAirline, mergeAirport, type CacheInput } from "./cache.js";
+import { AeroErrors } from "./errors.js";
+import { decodeBase64, DEFAULT_BASE_URL, encodeQuery, send, type Query, type Transport } from "./http.js";
 import {
-  DEFAULT_BASE_URL,
-  decodeBase64,
-  encodeQuery,
-  send,
-  type Query,
-  type Transport,
-} from "./http.js";
-import type {
-  AircraftOwner,
-  AircraftType,
-  Airport,
-  AirportFlightCounts,
-  AirportFlightKind,
-  AirportFlights,
-  AirportIdType,
-  AirportPage,
-  BlockedAircraft,
-  CanonicalAirportResponse,
-  CanonicalFlightResponse,
-  CanonicalOperatorResponse,
-  ConnectionKind,
-  DateWindow,
-  DisruptionCounts,
-  DisruptionEntity,
-  DisruptionEntityType,
-  DisruptionTimePeriod,
-  FlightKind,
-  FlightListQuery,
-  FlightPage,
-  FlightPosition,
-  FlightRoute,
-  FlightTrackResponse,
-  FlightsBetweenAirports,
-  IdentType,
-  MapImage,
-  MapQuery,
-  NearbyAirports,
-  Operator,
-  OperatorFlightCounts,
-  OperatorFlightKind,
-  OperatorFlights,
-  OperatorPage,
-} from "./types.js";
+  asAircraft,
+  asAirline,
+  asAirport,
+  asFlight,
+  asFlights,
+  mergeCodeshares,
+  referenceCache,
+  type AdvancedSearchParameter,
+  type Airline,
+  type AirlineFlightCountResponse,
+  type AirlineFlightsRequestType,
+  type AirlineFlightsResponse,
+  type AirlinesResponse,
+  type Airport,
+  type AirportFlightCounts,
+  type AirportFlightsRequestType,
+  type AirportFlightsResponse,
+  type AirportIdType,
+  type AirportRouteResponse,
+  type AirportsDelayedResponse,
+  type AirportsNearbyResponse,
+  type AirportsResponse,
+  type AirportStatus,
+  type AirportWeatherForecastResponse,
+  type AirportWeatherObservationsResponse,
+  type Aircraft,
+  type AircraftOwnerResponse,
+  type BlockedResponse,
+  type CanonicalAirlineResponse,
+  type CanonicalAirportResponse,
+  type CanonicalFlightIdResponse,
+  type DateRange,
+  type DisruptionCountResponse,
+  type DisruptionCountTimePeriod,
+  type DisruptionCountType,
+  type DisruptionEntity,
+  type Flight,
+  type FlightDataResponse,
+  type FlightRoute,
+  type FlightSearchResponse,
+  type FlightTrackPoint,
+  type FlightType,
+  type FlightsBetweenAirportsResponse,
+  type IdentType,
+  type LastFlightResponse,
+  type MapImage,
+  type RouteRequestSort,
+  type ScheduledFlight,
+  type ScheduledFlightResponse,
+  type TemperatureUnits,
+} from "./models.js";
+import {
+  advancedSearchQuery,
+  AircraftOwnerRequest,
+  AircraftTypeInfoRequest,
+  AirlineFlightCountRequest,
+  AirlineFlightsRequest,
+  AirlineInfoRequest,
+  AirlinesRequest,
+  AirportFlightsRequest,
+  AirportInfoRequest,
+  AirportRouteRequest,
+  AirportsNearbyRequest,
+  AirportsRequest,
+  AirportStatusRequest,
+  AirportWeatherForecastRequest,
+  AirportWeatherObservationRequest,
+  BlockedCheck,
+  CanonicalAirlineRequest,
+  CanonicalAirportRequest,
+  CanonicalFlightIdRequest,
+  DisruptionCountsRequest,
+  FlightDataRequest,
+  FlightPositionRequest,
+  FlightRouteRequest,
+  FlightTrackRequest,
+  FlightsBetweenAirportsRequest,
+  LastFlightRequest,
+  MapDataRequest,
+  ScheduledFlightRequest,
+  type AeroAPIRequest,
+} from "./requests.js";
 
 export interface AeroAPIOptions {
-  /** AeroAPI key from the FlightAware developer portal. */
-  apiKey: string;
-  /** Override the API origin. Defaults to the FlightAware AeroAPI host. */
+  apiKey?: string;
   baseUrl?: string;
-  /** Inject a fetch implementation. Defaults to the global `fetch`. */
   fetch?: typeof fetch;
 }
 
-const DAY_MS = 86_400_000;
-
-export function assertDateWindow(start: Date, end: Date): void {
-  if (start.getTime() >= end.getTime()) {
-    throw new AeroAPIError("Start Date cannot be before the End Date.", {
-      code: "startDateBeforeEndDate",
-    });
-  }
-  const now = Date.now();
-  if (start.getTime() <= now - 7 * DAY_MS || end.getTime() >= now + 2 * DAY_MS) {
-    throw new AeroAPIError(
-      "Start and End dates must be no further than a week in the past and two days in the future.",
-      { code: "invalidDateRange" },
-    );
-  }
-}
-
-export function assertMapDimension(name: "height" | "width", value: number): void {
-  if (!Number.isInteger(value) || value < 1 || value > 1500) {
-    throw new AeroAPIError(
-      `The ${name} (${value}) given to the request for map data is invalid. It must be between 1 and 1500!`,
-      { code: name === "height" ? "invalidMapHeight" : "invalidMapWidth" },
-    );
-  }
-}
-
-export function faFlightTimestamp(faFlightId: string): number {
-  const stamp = Number(faFlightId.split("-")[1]);
-  if (!Number.isFinite(stamp)) {
-    throw new AeroAPIError(`The FAID date string is invalid: ${faFlightId}`, {
-      code: "faIdDateInvalid",
-    });
-  }
-  return stamp;
-}
-
-export function isHistoricalFlight(faFlightId: string, nowSeconds = Date.now() / 1000): boolean {
-  return nowSeconds > faFlightTimestamp(faFlightId);
-}
-
-function dateQuery(window: DateWindow | undefined): Query {
-  if (!window) return {};
-  assertDateWindow(window.start, window.end);
-  return { start: window.start, end: window.end };
-}
-
-function flightQuery(query: FlightListQuery | undefined): Query {
-  return {
-    ident_type: query?.identType,
-    start: query?.start,
-    end: query?.end,
-    max_pages: query?.maxPages,
-    cursor: query?.cursor,
-  };
-}
-
-/**
- * FlightAware AeroAPI client for browsers and Node.js.
- *
- * Covers the same flight, airport, operator, history, aircraft, and disruption
- * endpoints as the iOS Swift package.
- */
 export class AeroAPI {
-  readonly apiKey: string;
+  static debug = false;
+  static showHTTPRequestURLs = false;
+  static readonly allAirports = referenceCache.airports;
+  static readonly allAirlines = referenceCache.airlines;
+  static readonly allAircraft = referenceCache.aircraft;
+
+  private static shared = new AeroAPI({ apiKey: "" });
+
+  /** Shared client, matching `AeroAPI.manager` in Swift. */
+  static get manager(): AeroAPI {
+    return AeroAPI.shared;
+  }
+
+  apiKey: string;
   readonly baseUrl: string;
   private readonly transport: Transport;
 
-  constructor(options: AeroAPIOptions) {
-    this.apiKey = options.apiKey;
+  constructor(options: AeroAPIOptions = {}) {
+    this.apiKey = options.apiKey ?? "";
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
     const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.transport = (url, init) => fetchImpl(url, init);
   }
 
-  /** Absolute URL the client would request. Useful for diagnostics. */
-  url(path: string, query?: Query): string {
-    return `${this.baseUrl}${path}${encodeQuery(query)}`;
+  setApiKey(key: string): void {
+    this.apiKey = key;
   }
 
-  private get<T>(path: string, query?: Query): Promise<T> {
-    return send<T>(this.transport, this.baseUrl, this.apiKey, path, query);
+  async loadCache(input?: CacheInput): Promise<void> {
+    await loadReferenceCache(input);
   }
 
-  private async map(path: string, query: Query): Promise<MapImage> {
-    const payload = await this.get<{ map?: string }>(path, query);
-    if (!payload.map) {
-      throw new AeroAPIError("Failed to decode 'map' from JSON data response", {
-        code: "failedDecodingMapData",
-      });
+  private log(path: string, query: Query): void {
+    if (!(AeroAPI.debug || AeroAPI.showHTTPRequestURLs)) return;
+    console.log("REQUESTING:");
+    console.log(`${this.baseUrl}${path}${encodeQuery(query)}`);
+    console.log();
+  }
+
+  private async call<T>(request: AeroAPIRequest): Promise<T> {
+    this.log(request.path(), request.query());
+    return send<T>(this.transport, this.baseUrl, this.apiKey, request.path(), request.query());
+  }
+
+  private async searchFlights(path: string, query: Query): Promise<FlightDataResponse> {
+    this.log(path, query);
+    const page = await send<FlightDataResponse>(this.transport, this.baseUrl, this.apiKey, path, query);
+    page.flights = asFlights(page.flights as unknown as object[]);
+    return page;
+  }
+
+  async getFlightData(faId: string): Promise<Flight | null>;
+  async getFlightData(request: FlightDataRequest): Promise<FlightDataResponse>;
+  async getFlightData(faIdOrRequest: string | FlightDataRequest): Promise<Flight | null | FlightDataResponse> {
+    if (typeof faIdOrRequest === "string") {
+      const page = await this.getFlightData(FlightDataRequest.faId(faIdOrRequest));
+      return page.flights?.[0] ?? null;
     }
+    return this.searchFlights(faIdOrRequest.path(), faIdOrRequest.query());
+  }
+
+  flightIDCanonical(code: string, type?: IdentType, countryCode?: string): Promise<CanonicalFlightIdResponse> {
+    return this.call(new CanonicalFlightIdRequest(code, type, countryCode));
+  }
+
+  getPosition(faId: string): Promise<FlightSearchResponse> {
+    return this.call(new FlightPositionRequest(faId));
+  }
+
+  async getRoute(faId: string): Promise<FlightRoute> {
+    return this.call(new FlightRouteRequest(faId));
+  }
+
+  async getTrack(faId: string, includeEstimatedPositions = false): Promise<FlightTrackPoint[]> {
+    const data = await this.call<{ positions?: FlightTrackPoint[] }>(new FlightTrackRequest(faId, includeEstimatedPositions));
+    if (!data.positions) throw AeroErrors.failedDecodingFlightTrackResponse();
+    if (data.positions.length === 0) throw AeroErrors.flightTrackEmpty();
+    return data.positions;
+  }
+
+  async getMap(request: MapDataRequest): Promise<MapImage> {
+    const payload = await this.call<{ map?: string }>(request);
+    if (!payload.map) throw AeroErrors.failedDecodingMapData();
     const bytes = decodeBase64(payload.map);
     let binary = "";
     for (const byte of bytes) binary += String.fromCharCode(byte);
     return { bytes, dataUrl: `data:image/png;base64,${btoa(binary)}` };
   }
 
-  readonly flights = {
-    list: (ident: string, query?: FlightListQuery): Promise<FlightPage> => {
-      const historical = query?.historical ?? false;
-      const prefix = historical ? "/history" : "";
-      return this.get<FlightPage>(`${prefix}/flights/${encodeURIComponent(ident)}`, flightQuery(query));
-    },
+  advancedSearch(parameter: AdvancedSearchParameter): Promise<FlightDataResponse> {
+    return this.searchFlights("/flights/search/advanced", advancedSearchQuery(parameter));
+  }
 
-    canonical: (ident: string, identType?: IdentType, countryCode?: string): Promise<CanonicalFlightResponse> =>
-      this.get(`/flights/${encodeURIComponent(ident)}/canonical`, {
-        ident_type: identType,
-        country_code: countryCode,
-      }),
+  getAirports(maxPages = 1): Promise<AirportsResponse> {
+    return this.call(new AirportsRequest(maxPages));
+  }
 
-    position: (faFlightId: string): Promise<FlightPosition> =>
-      this.get(`/flights/${encodeURIComponent(faFlightId)}/position`),
+  airportCanonical(code: string, type: AirportIdType = "icao"): Promise<CanonicalAirportResponse> {
+    return this.call(new CanonicalAirportRequest(code, type));
+  }
 
-    route: async (faFlightId: string, historical = isHistoricalFlight(faFlightId)): Promise<FlightRoute> => {
-      const prefix = historical ? "/history" : "";
-      return this.get(`${prefix}/flights/${encodeURIComponent(faFlightId)}/route`);
-    },
+  async getAirportInfo(id: { code: string } | { icao: string } | { iata: string }): Promise<Airport> {
+    const code = "code" in id ? id.code : "icao" in id ? id.icao : id.iata;
+    const airport = asAirport(await this.call<object>(new AirportInfoRequest(code)));
+    if ("icao" in id) return mergeAirport(airport, { icao: id.icao });
+    if ("iata" in id) return mergeAirport(airport, { iata: id.iata });
+    return mergeAirport(airport, { code: id.code });
+  }
 
-    track: async (
-      faFlightId: string,
-      options?: { includeEstimated?: boolean; historical?: boolean },
-    ): Promise<FlightTrackResponse> => {
-      const historical = options?.historical ?? isHistoricalFlight(faFlightId);
-      const prefix = historical ? "/history" : "";
-      return this.get(`${prefix}/flights/${encodeURIComponent(faFlightId)}/track`, {
-        include_estimated_positions: options?.includeEstimated ?? true,
-      });
-    },
+  async getAirportFlights(request: AirportFlightsRequest): Promise<AirportFlightsResponse> {
+    const response = await this.call<AirportFlightsResponse>(request);
+    response.arrivals = asFlights(response.arrivals as unknown as object[]);
+    response.departures = asFlights(response.departures as unknown as object[]);
+    response.scheduledArrivals = asFlights(response.scheduledArrivals as unknown as object[]);
+    response.scheduledDepartures = asFlights(response.scheduledDepartures as unknown as object[]);
+    return response;
+  }
 
-    map: async (faFlightId: string, query: MapQuery = {}): Promise<MapImage> => {
-      const width = query.width ?? 640;
-      const height = query.height ?? 480;
-      assertMapDimension("width", width);
-      assertMapDimension("height", height);
-      const historical = query.historical ?? isHistoricalFlight(faFlightId);
-      const prefix = historical ? "/history" : "";
-      return this.map(`${prefix}/flights/${encodeURIComponent(faFlightId)}/map`, {
-        width,
-        height,
-        layer_on: query.layersOn,
-        layer_off: query.layersOff,
-        show_data_block: query.showDataBlock,
-        airports_expand_view: query.airportsExpandView,
-        show_airports: query.showAirports,
-      });
-    },
-  };
+  /** Swift's async name is `getAirportsFlights`. */
+  getAirportsFlights(request: AirportFlightsRequest): Promise<AirportFlightsResponse> {
+    return this.getAirportFlights(request);
+  }
 
-  readonly history = {
-    flights: (ident: string, query?: Omit<FlightListQuery, "historical">): Promise<FlightPage> =>
-      this.flights.list(ident, { ...query, historical: true }),
+  getAirportFlightCounts(code: string): Promise<AirportFlightCounts> {
+    return this.call({ path: () => `/airports/${encodeURIComponent(code)}/flights/counts`, query: () => ({}) });
+  }
 
-    lastFlight: (registration: string): Promise<FlightPage> =>
-      this.get(`/history/aircraft/${encodeURIComponent(registration)}/last_flight`),
+  async getFlightsBetweenAirports(request: FlightsBetweenAirportsRequest): Promise<FlightsBetweenAirportsResponse> {
+    const response = await this.call<FlightsBetweenAirportsResponse>(request);
+    response.flights = response.flights?.map((segment) => ({
+      segments: asFlights(segment.segments as unknown as object[]) ?? [],
+    }));
+    return response;
+  }
 
-    route: (faFlightId: string): Promise<FlightRoute> => this.flights.route(faFlightId, true),
+  getAirportsNear(request: AirportsNearbyRequest): Promise<AirportsNearbyResponse> {
+    return this.call(request);
+  }
 
-    track: (faFlightId: string, includeEstimated = true): Promise<FlightTrackResponse> =>
-      this.flights.track(faFlightId, { includeEstimated, historical: true }),
+  getAirportStatus(code: string): Promise<AirportStatus> {
+    return this.call(new AirportStatusRequest(code));
+  }
 
-    map: (faFlightId: string, query: Omit<MapQuery, "historical"> = {}): Promise<MapImage> =>
-      this.flights.map(faFlightId, { ...query, historical: true }),
-  };
+  getAirportsDelayed(): Promise<AirportsDelayedResponse> {
+    return this.call(new AirportStatusRequest());
+  }
 
-  readonly airports = {
-    list: (maxPages = 1): Promise<AirportPage> => this.get("/airports", { max_pages: maxPages }),
+  getAirportForecast(code: string, timestamp = new Date(), returnNearby = true): Promise<AirportWeatherForecastResponse> {
+    return this.call(new AirportWeatherForecastRequest(code, timestamp, returnNearby));
+  }
 
-    get: (code: string): Promise<Airport> => this.get(`/airports/${encodeURIComponent(code)}`),
+  getAirportObservations(
+    code: string,
+    options: { temperatureUnits?: TemperatureUnits; timestamp?: Date; returnNearby?: boolean; maxPages?: number } = {},
+  ): Promise<AirportWeatherObservationsResponse> {
+    return this.call(new AirportWeatherObservationRequest(code, options));
+  }
 
-    canonical: (code: string, idType: AirportIdType = "icao"): Promise<CanonicalAirportResponse> =>
-      this.get(`/airports/${encodeURIComponent(code)}/canonical`, { id_type: idType }),
+  getRoutesBetween(
+    origin: string,
+    destination: string,
+    _sortBy: RouteRequestSort = "count",
+    _maxFileAge = "2 weeks",
+    maxPages = 3,
+  ): Promise<AirportRouteResponse> {
+    return this.call(new AirportRouteRequest(origin, destination, maxPages));
+  }
 
-    delays: (code?: string): Promise<Record<string, unknown>> =>
-      this.get(code ? `/airports/${encodeURIComponent(code)}/delays` : "/airports/delays"),
+  getAirlines(maxPages = 1): Promise<AirlinesResponse> {
+    return this.call(new AirlinesRequest(maxPages));
+  }
 
-    flights: async (
-      code: string,
-      options?: { kind?: AirportFlightKind; window?: DateWindow; maxPages?: number; cursor?: string },
-    ): Promise<AirportFlights> => {
-      const kind = options?.kind ?? "all";
-      const suffix = kind === "all" ? "" : `/${kind}`;
-      return this.get(`/airports/${encodeURIComponent(code)}/flights${suffix}`, {
-        ...dateQuery(options?.window),
-        max_pages: options?.maxPages,
-        cursor: options?.cursor,
-      });
-    },
+  airlineCanonical(code: string, countryCode?: string): Promise<CanonicalAirlineResponse> {
+    return this.call(new CanonicalAirlineRequest(code, countryCode));
+  }
 
-    flightCounts: (code: string): Promise<AirportFlightCounts> =>
-      this.get(`/airports/${encodeURIComponent(code)}/flights/counts`),
+  async getAirlineInfo(id: { icao: string } | { iata: string }): Promise<Airline> {
+    const code = "icao" in id ? id.icao : id.iata;
+    const airline = asAirline(await this.call<object>(new AirlineInfoRequest(code)));
+    return "icao" in id ? mergeAirline(airline, { icao: id.icao }) : mergeAirline(airline, { iata: id.iata });
+  }
 
-    flightsBetween: async (
-      origin: string,
-      destination: string,
-      options?: {
-        type?: FlightKind;
-        connection?: ConnectionKind;
-        window?: DateWindow;
-        maxPages?: number;
-        cursor?: string;
-      },
-    ): Promise<FlightsBetweenAirports> =>
-      this.get(`/airports/${encodeURIComponent(origin)}/flights/to/${encodeURIComponent(destination)}`, {
-        type: options?.type ?? "Airline",
-        connection: options?.connection ?? "nonstop",
-        ...dateQuery(options?.window),
-        max_pages: options?.maxPages ?? 1,
-        cursor: options?.cursor,
-      }),
+  getAirlineCountsOnRecord(icao: string): Promise<AirlineFlightCountResponse> {
+    return this.call(new AirlineFlightCountRequest(icao));
+  }
 
-    nearby: (options: {
-      code?: string;
-      latitude?: number;
-      longitude?: number;
-      radius?: number;
-      onlyInstrumentApproaches?: boolean;
-      maxPages?: number;
-      cursor?: string;
-    }): Promise<NearbyAirports> => {
-      const path = options.code ? `/airports/${encodeURIComponent(options.code)}/nearby` : "/airports/nearby";
-      return this.get(path, {
-        latitude: options.latitude,
-        longitude: options.longitude,
-        radius: options.radius ?? 250,
-        only_iap: options.onlyInstrumentApproaches ?? false,
-        max_pages: options.maxPages ?? 1,
-        cursor: options.cursor,
-      });
-    },
+  async getAirlineFlights(request: AirlineFlightsRequest): Promise<AirlineFlightsResponse> {
+    const response = await this.call<AirlineFlightsResponse>(request);
+    response.arrivals = asFlights(response.arrivals as unknown as object[]);
+    response.scheduled = asFlights(response.scheduled as unknown as object[]);
+    response.enroute = asFlights(response.enroute as unknown as object[]);
+    return response;
+  }
 
-    routes: (origin: string, destination: string, sortBy?: string): Promise<Record<string, unknown>> =>
-      this.get(`/airports/${encodeURIComponent(origin)}/routes/${encodeURIComponent(destination)}`, {
-        sort_by: sortBy,
-      }),
+  getAirlineFlightCounts(icao: string): Promise<AirlineFlightsResponse> {
+    return this.call(new AirlineFlightCountRequest(icao));
+  }
 
-    forecast: (code: string, timestamp?: Date, temperatureUnits?: "F" | "C"): Promise<Record<string, unknown>> =>
-      this.get(`/airports/${encodeURIComponent(code)}/weather/forecast`, {
-        timestamp,
-        temperature_units: temperatureUnits,
-      }),
+  async lastFlightFor(tailno: string): Promise<Flight | null> {
+    const response = await this.call<LastFlightResponse>(new LastFlightRequest(tailno));
+    const flights = asFlights(response.flights as unknown as object[]);
+    return flights?.[0] ?? null;
+  }
 
-    observations: (
-      code: string,
-      options?: { timestamp?: Date; temperatureUnits?: "F" | "C"; returnNearbyWeather?: boolean },
-    ): Promise<Record<string, unknown>> =>
-      this.get(`/airports/${encodeURIComponent(code)}/weather/observations`, {
-        timestamp: options?.timestamp,
-        temperature_units: options?.temperatureUnits,
-        return_nearby_weather: options?.returnNearbyWeather,
-      }),
-  };
+  async checkBlocked(registration: string): Promise<boolean> {
+    const response = await this.call<BlockedResponse>(new BlockedCheck(registration));
+    return response.blocked;
+  }
 
-  readonly operators = {
-    list: (maxPages = 1): Promise<OperatorPage> => this.get("/operators", { max_pages: maxPages }),
+  async getAircraftInfo(icao: string): Promise<Aircraft> {
+    const aircraft = asAircraft(await this.call<object>(new AircraftTypeInfoRequest(icao)));
+    return mergeAircraft(aircraft, icao);
+  }
 
-    get: (code: string): Promise<Operator> => this.get(`/operators/${encodeURIComponent(code)}`),
+  getOwner(registration: string): Promise<AircraftOwnerResponse> {
+    return this.call(new AircraftOwnerRequest(registration));
+  }
 
-    canonical: (code: string, countryCode?: string): Promise<CanonicalOperatorResponse> =>
-      this.get(`/operators/${encodeURIComponent(code)}/canonical`, { country_code: countryCode }),
+  disruptionsAt(options: {
+    entity: string;
+    type: DisruptionCountType;
+    timePeriod?: DisruptionCountTimePeriod;
+  }): Promise<DisruptionEntity> {
+    return this.call(
+      new DisruptionCountsRequest(options.type, { code: options.entity, timePeriod: options.timePeriod }),
+    );
+  }
 
-    flights: async (
-      code: string,
-      options?: { kind?: OperatorFlightKind; window?: DateWindow; maxPages?: number; cursor?: string },
-    ): Promise<OperatorFlights> => {
-      const kind = options?.kind ?? "all";
-      const suffix = kind === "all" ? "" : `/${kind}`;
-      return this.get(`/operators/${encodeURIComponent(code)}/flights${suffix}`, {
-        ...dateQuery(options?.window),
-        max_pages: options?.maxPages ?? 1,
-        cursor: options?.cursor,
-      });
-    },
+  disruptionCounts(
+    options:
+      | { airline: string; timePeriod?: DisruptionCountTimePeriod; maxPages?: number }
+      | { type?: DisruptionCountType; timePeriod?: DisruptionCountTimePeriod; maxPages?: number },
+  ): Promise<DisruptionCountResponse> {
+    const type = "airline" in options ? "airline" : (options.type ?? "origin");
+    return this.call(new DisruptionCountsRequest(type, { timePeriod: options.timePeriod, maxPages: options.maxPages }));
+  }
 
-    flightCounts: (code: string): Promise<OperatorFlightCounts> =>
-      this.get(`/operators/${encodeURIComponent(code)}/flights/counts`),
-  };
-
-  readonly aircraft = {
-    blocked: async (ident: string): Promise<boolean> => {
-      const response = await this.get<BlockedAircraft>(`/aircraft/${encodeURIComponent(ident)}/blocked`);
-      return response.blocked;
-    },
-
-    owner: (ident: string): Promise<AircraftOwner> => this.get(`/aircraft/${encodeURIComponent(ident)}/owner`),
-
-    type: (icao: string): Promise<AircraftType> => this.get(`/aircraft/types/${encodeURIComponent(icao)}`),
-  };
-
-  readonly disruptions = {
-    list: (
-      entityType: DisruptionEntityType,
-      options?: { timePeriod?: DisruptionTimePeriod; maxPages?: number },
-    ): Promise<DisruptionCounts> =>
-      this.get(`/disruption_counts/${entityType}/`, {
-        time_period: options?.timePeriod ?? "today",
-        max_pages: options?.maxPages ?? 1,
-      }),
-
-    get: (
-      entityType: DisruptionEntityType,
-      code: string,
-      timePeriod: DisruptionTimePeriod = "today",
-    ): Promise<DisruptionEntity> =>
-      this.get(`/disruption_counts/${entityType}/${encodeURIComponent(code)}`, {
-        time_period: timePeriod,
-      }),
-  };
+  async getScheduled(request: ScheduledFlightRequest): Promise<ScheduledFlight[]> {
+    const response = await this.call<ScheduledFlightResponse>(request);
+    if (!response.scheduled) throw AeroErrors.failedDecodingScheduledFlightResponse();
+    return mergeCodeshares(response.scheduled);
+  }
 }
+
+export function airportFlights(code: string, options?: {
+  airline?: string;
+  type?: FlightType;
+  dateRange?: DateRange;
+  cursor?: string;
+  requestType?: AirportFlightsRequestType;
+}): AirportFlightsRequest {
+  return new AirportFlightsRequest(code, options);
+}
+
+export function airlineFlights(code: string, options?: {
+  dateRange?: DateRange;
+  cursor?: string;
+  requestType?: AirlineFlightsRequestType;
+}): AirlineFlightsRequest {
+  return new AirlineFlightsRequest(code, options);
+}
+
+export function flightsBetween(
+  origin: string,
+  destination: string,
+  options?: ConstructorParameters<typeof FlightsBetweenAirportsRequest>[2],
+): FlightsBetweenAirportsRequest {
+  return new FlightsBetweenAirportsRequest(origin, destination, options);
+}
+
+export function airportsNear(options: ConstructorParameters<typeof AirportsNearbyRequest>[0]): AirportsNearbyRequest {
+  return new AirportsNearbyRequest(options);
+}
+
+export function mapRequest(faId: string, options?: ConstructorParameters<typeof MapDataRequest>[1]): MapDataRequest {
+  return new MapDataRequest(faId, options);
+}
+
+export { FlightDataRequest, MapDataRequest, ScheduledFlightRequest };

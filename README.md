@@ -32,10 +32,13 @@ npm run build
 ```
 
 ```ts
-import { AeroAPI } from "aeroapi-web";
+import { AeroAPI, FlightDataRequest } from "aeroapi-web";
 
-const api = new AeroAPI({ apiKey: process.env.AEROAPI_KEY ?? "" });
-const page = await api.flights.list("UAL1", { identType: "designator" });
+AeroAPI.manager.setApiKey(process.env.AEROAPI_KEY ?? "");
+const flight = await AeroAPI.manager.getFlightData("UAL1-1700000000-fa-1");
+const page = await AeroAPI.manager.getFlightData(
+  FlightDataRequest.ident({ ident: "UAL1", type: "designator" }),
+);
 ```
 
-The web client calls `https://aeroapi.flightaware.com/aeroapi` with the `x-apikey` header and exposes the same flight, airport, operator, history, aircraft, and disruption endpoints as the Swift library. Details are in `packages/aeroapi-web/README.md`.
+The web client uses the Swift method names (`getFlightData`, `getAirportInfo`, `getMap`, and the rest of the async surface). It calls `https://aeroapi.flightaware.com/aeroapi` with the `x-apikey` header. Details are in `packages/aeroapi-web/README.md`.
