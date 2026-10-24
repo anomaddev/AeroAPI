@@ -2,6 +2,7 @@
   "name": "aeroapi",
   "private": true,
   "description": "Monorepo for the AeroAPI iOS Swift package and web client",
+  "license": "MIT",
   "workspaces": [
     "packages/aeroapi-web"
   ],
