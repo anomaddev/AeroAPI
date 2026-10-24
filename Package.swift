@@ -32,6 +32,7 @@ let package = Package(
                 "Defaults",
                 "NomadUtilities"
             ],
+            path: "packages/aeroapi-swift/Sources/AeroAPI",
             resources: [
                 .copy("Databases/airports.json"),
                 .copy("Databases/airlines.json"),
@@ -44,6 +45,7 @@ let package = Package(
             name: "AeroAPITests",
             dependencies: [
                 "AeroAPI"
-            ]),
+            ],
+            path: "packages/aeroapi-swift/Tests/AeroAPITests"),
     ]
 )
