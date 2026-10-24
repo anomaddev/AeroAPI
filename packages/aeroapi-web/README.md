@@ -1,33 +1,37 @@
 # aeroapi-web
 
-TypeScript client for the [FlightAware AeroAPI](https://www.flightaware.com/aeroapi/portal/documentation). It runs in browsers and Node.js 18+ and covers the same endpoints as the iOS Swift package in this repository.
+TypeScript port of the iOS `AeroAPI` class. It runs in browsers and Node.js 18+ and calls the [FlightAware AeroAPI](https://www.flightaware.com/aeroapi/portal/documentation) with the same async method names as the Swift package.
+
+UIKit, MapKit, and the offline timezone map stay on iOS. `getMap` returns PNG bytes and a data URL. Timestamps in responses stay ISO strings.
 
 ## Install
-
-From this monorepo:
 
 ```bash
 npm install
 npm run build -w aeroapi-web
 ```
 
-The package entry is `aeroapi-web`.
-
 ## Use
 
 ```ts
-import { AeroAPI } from "aeroapi-web";
+import { AeroAPI, FlightDataRequest } from "aeroapi-web";
 
-const api = new AeroAPI({ apiKey: process.env.AEROAPI_KEY ?? "" });
+AeroAPI.manager.setApiKey(process.env.AEROAPI_KEY ?? "");
 
-const flights = await api.flights.list("UAL1", { identType: "designator" });
-const airport = await api.airports.get("KSFO");
-const map = await api.flights.map(flights.flights?.[0]?.faFlightId ?? "");
+const flight = await AeroAPI.manager.getFlightData("UAL1-1700000000-fa-1");
+const page = await AeroAPI.manager.getFlightData(
+  FlightDataRequest.ident({ ident: "UAL1", type: "designator" }),
+);
 ```
 
-`map.bytes` is the decoded PNG. `map.dataUrl` can be assigned to an image element.
+`loadCache()` reads the airport, airline, and aircraft JSON shipped with the Swift package when you run it from this monorepo on Node.js. Pass parsed arrays instead when those files are not on disk:
 
-Timestamps in responses stay ISO strings. Request dates are sent as `yyyy-MM-dd'T'HH:mm:ss'Z'`. Response objects use camelCase keys.
+```ts
+await AeroAPI.manager.loadCache({ airports, airlines, aircraft });
+const matches = Airport.search("SFO");
+```
+
+`getAirportInfo`, `getAirlineInfo`, and `getAircraftInfo` merge the live response onto that cache, matching the iOS client.
 
 ## Scripts
 
