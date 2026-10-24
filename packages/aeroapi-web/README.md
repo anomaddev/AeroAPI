@@ -1,4 +1,4 @@
-# aeroapi-web
+# aeroapi
 
 TypeScript port of the iOS `AeroAPI` class. It runs in browsers and Node.js 18+ and calls the [FlightAware AeroAPI](https://www.flightaware.com/aeroapi/portal/documentation) with the same async method names as the Swift package.
 
@@ -7,14 +7,20 @@ UIKit, MapKit, and the offline timezone map stay on iOS. `getMap` returns PNG by
 ## Install
 
 ```bash
+npm install aeroapi@0.5.0
+```
+
+From a checkout of this repository:
+
+```bash
 npm install
-npm run build -w aeroapi-web
+npm run build -w aeroapi
 ```
 
 ## Use
 
 ```ts
-import { AeroAPI, FlightDataRequest } from "aeroapi-web";
+import { AeroAPI, FlightDataRequest } from "aeroapi";
 
 AeroAPI.manager.setApiKey(process.env.AEROAPI_KEY ?? "");
 
@@ -36,6 +42,6 @@ const matches = Airport.search("SFO");
 ## Scripts
 
 ```bash
-npm test -w aeroapi-web
-npm run build -w aeroapi-web
+npm test -w aeroapi
+npm run build -w aeroapi
 ```

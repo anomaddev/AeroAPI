@@ -17,8 +17,8 @@ let package = Package(
          .package(url: "https://github.com/michaeleisel/ZippyJSON.git", from: "1.2.6"),
          .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.0.0")),
          .package(url: "https://github.com/malcommac/SwiftDate.git", .upToNextMajor(from: "7.0.0")),
-         .package(url: "https://github.com/sindresorhus/Defaults.git", .upToNextMajor(from: "8.0.0")),
-         .package(path: "../NomadUtilities")
+         .package(url: "https://github.com/sindresorhus/Defaults.git", .upToNextMajor(from: "9.0.0")),
+         .package(url: "https://github.com/anomaddev/NomadUtilities", from: "0.1.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -29,8 +29,8 @@ let package = Package(
                 "Alamofire",
                 "ZippyJSON",
                 "SwiftDate",
-                "Defaults",
-                "NomadUtilities"
+                .product(name: "Defaults", package: "Defaults"),
+                .product(name: "NomadUtilities", package: "NomadUtilities")
             ],
             path: "packages/aeroapi-swift/Sources/AeroAPI",
             resources: [

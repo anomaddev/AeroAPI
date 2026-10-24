@@ -5,7 +5,7 @@ Monorepo for native FlightAware AeroAPI libraries.
 | Package | Path | Runtime |
 | --- | --- | --- |
 | Swift package `AeroAPI` | `packages/aeroapi-swift` | iOS 15 and macOS 11 |
-| npm package `aeroapi-web` | `packages/aeroapi-web` | Browsers and Node.js 18+ |
+| npm package `aeroapi` | `packages/aeroapi-web` | Browsers and Node.js 18+ |
 
 `Package.swift` stays at the repository root so Swift Package Manager and Xcode can add this repository as the iOS library. The sample iOS app is in `apps/ios-demo`.
 
@@ -13,7 +13,7 @@ Monorepo for native FlightAware AeroAPI libraries.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/anomaddev/AeroAPI-Swift.git", branch: "main")
+    .package(url: "https://github.com/anomaddev/AeroAPI.git", from: "0.5.0")
 ]
 ```
 
@@ -21,9 +21,15 @@ dependencies: [
 AeroAPI.manager.set(apiKey: "api-key-goes-here")
 ```
 
-The Swift package expects [NomadUtilities](https://github.com/anomaddev/NomadUtilities) checked out next to this repository (`../NomadUtilities`). See `packages/aeroapi-swift/README.md` for the endpoint list.
+The Swift package depends on [NomadUtilities](https://github.com/anomaddev/NomadUtilities) 0.1.0+, resolved by Swift Package Manager. See `packages/aeroapi-swift/README.md` for the endpoint list.
 
 ## Web
+
+```bash
+npm install aeroapi@0.5.0
+```
+
+From a checkout of this repository:
 
 ```bash
 npm install
@@ -32,7 +38,7 @@ npm run build
 ```
 
 ```ts
-import { AeroAPI, FlightDataRequest } from "aeroapi-web";
+import { AeroAPI, FlightDataRequest } from "aeroapi";
 
 AeroAPI.manager.setApiKey(process.env.AEROAPI_KEY ?? "");
 const flight = await AeroAPI.manager.getFlightData("UAL1-1700000000-fa-1");
