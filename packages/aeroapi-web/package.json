@@ -2,6 +2,7 @@
   "name": "aeroapi-web",
   "version": "0.1.0",
   "description": "FlightAware AeroAPI client for browsers and Node.js",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

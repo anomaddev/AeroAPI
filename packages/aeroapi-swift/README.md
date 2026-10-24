@@ -24,6 +24,8 @@ The sample app is in `apps/ios-demo`.
 
 ## Supported endpoints
 
+Request and response fields for these paths are in the Redoc page at `docs/http/index.html`, published to [https://anomaddev.github.io/AeroAPI/http/](https://anomaddev.github.io/AeroAPI/http/).
+
 ### Flights
 
 - GET /flights/{id}/map

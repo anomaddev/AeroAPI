@@ -1,0 +1,2429 @@
+openapi: 3.0.3
+info:
+  title: AeroAPI HTTP reference
+  version: 0.1.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  description: |
+    HTTP contract called by the Swift `AeroAPI` package and the `aeroapi-web` client.
+    Both send `GET` requests to FlightAware AeroAPI with the `x-apikey` header.
+
+    Timestamps use `yyyy-MM-dd'T'HH:mm:ss'Z'`. JSON property names in this document are
+    the snake_case fields on the wire. `aeroapi-web` camelizes those keys after decode.
+
+    This covers the paths the clients build. It does not cover the rest of FlightAware AeroAPI.
+    `ScheduledFlightRequest` is omitted because its path is empty and it does not call AeroAPI.
+servers:
+  - url: https://aeroapi.flightaware.com/aeroapi
+    description: FlightAware AeroAPI
+tags:
+  - name: Flights
+    description: Flight lookup, position, route, track, map, and advanced search.
+  - name: Airports
+    description: Airport directory, flights, nearby search, delays, weather, and routes.
+  - name: Operators
+    description: Operators (airlines), canonical codes, and operator flights.
+  - name: History
+    description: Historical flight resources and the last flight for a registration.
+  - name: Aircraft
+    description: Blocked status, owner, and aircraft type information.
+  - name: Disruption
+    description: Cancellation and delay counts by airline, origin, or destination.
+security:
+  - ApiKey: []
+paths:
+  /flights/{ident}:
+    get:
+      tags: [Flights]
+      operationId: getFlights
+      summary: List flights for an ident
+      description: |
+        Live flight page. The client uses `/history/flights/{ident}` instead when the
+        request is marked historical or the date window starts in the past.
+      parameters:
+        - $ref: "#/components/parameters/FlightIdent"
+        - $ref: "#/components/parameters/IdentType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/WindowStart"
+        - $ref: "#/components/parameters/WindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of flights.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /history/flights/{ident}:
+    get:
+      tags: [Flights, History]
+      operationId: getHistoricalFlights
+      summary: List historical flights for an ident
+      description: Same query as `GET /flights/{ident}`. Used when the flight date is in the past.
+      parameters:
+        - $ref: "#/components/parameters/FlightIdent"
+        - $ref: "#/components/parameters/IdentType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/WindowStart"
+        - $ref: "#/components/parameters/WindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of historical flights.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /flights/{ident}/canonical:
+    get:
+      tags: [Flights]
+      operationId: getCanonicalFlightId
+      summary: Resolve a flight ident to canonical ids
+      description: |
+        The client omits `ident_type` when it is unset or `fa_flight_id`.
+      parameters:
+        - $ref: "#/components/parameters/FlightIdent"
+        - name: ident_type
+          in: query
+          required: false
+          description: Ident type. Omitted by the client for `fa_flight_id`.
+          schema:
+            type: string
+            enum: [designator, registration]
+        - name: country_code
+          in: query
+          required: false
+          description: Optional country code used to disambiguate the ident.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Canonical flight idents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanonicalFlightIdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /flights/{id}/position:
+    get:
+      tags: [Flights]
+      operationId: getFlightPosition
+      summary: Get the latest position for a FlightAware flight id
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+      responses:
+        "200":
+          description: Latest position and predicted times.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightPosition"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /flights/{id}/route:
+    get:
+      tags: [Flights]
+      operationId: getFlightRoute
+      summary: Get the filed route for a live flight
+      description: The client calls the history route when the FlightAware id timestamp is in the past.
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+      responses:
+        "200":
+          description: Filed route fixes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightRoute"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /history/flights/{id}/route:
+    get:
+      tags: [Flights, History]
+      operationId: getHistoricalFlightRoute
+      summary: Get the filed route for a historical flight
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+      responses:
+        "200":
+          description: Filed route fixes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightRoute"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /flights/{id}/track:
+    get:
+      tags: [Flights]
+      operationId: getFlightTrack
+      summary: Get track positions for a live flight
+      description: |
+        The web client reads `positions` and rejects a missing or empty array.
+        Historical ids are requested from `/history/flights/{id}/track`.
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+        - $ref: "#/components/parameters/IncludeEstimatedPositions"
+      responses:
+        "200":
+          description: Track positions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightTrackResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /history/flights/{id}/track:
+    get:
+      tags: [Flights, History]
+      operationId: getHistoricalFlightTrack
+      summary: Get track positions for a historical flight
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+        - $ref: "#/components/parameters/IncludeEstimatedPositions"
+      responses:
+        "200":
+          description: Historical track positions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightTrackResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /flights/{id}/map:
+    get:
+      tags: [Flights]
+      operationId: getFlightMap
+      summary: Get a map image for a live flight
+      description: |
+        Response field `map` is a base64-encoded PNG. The web client decodes it to bytes
+        and a `data:image/png` URL. Height and width must be integers from 1 to 1500.
+        The client uses the history map when the flight id is in the past, unless
+        `historical` is set explicitly on the request.
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+        - $ref: "#/components/parameters/MapHeight"
+        - $ref: "#/components/parameters/MapWidth"
+        - $ref: "#/components/parameters/LayerOn"
+        - $ref: "#/components/parameters/LayerOff"
+        - $ref: "#/components/parameters/ShowDataBlock"
+        - $ref: "#/components/parameters/AirportsExpandView"
+        - $ref: "#/components/parameters/ShowAirports"
+      responses:
+        "200":
+          description: Base64 PNG map.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /history/flights/{id}/map:
+    get:
+      tags: [Flights, History]
+      operationId: getHistoricalFlightMap
+      summary: Get a map image for a historical flight
+      parameters:
+        - $ref: "#/components/parameters/FaFlightId"
+        - $ref: "#/components/parameters/MapHeight"
+        - $ref: "#/components/parameters/MapWidth"
+        - $ref: "#/components/parameters/LayerOn"
+        - $ref: "#/components/parameters/LayerOff"
+        - $ref: "#/components/parameters/ShowDataBlock"
+        - $ref: "#/components/parameters/AirportsExpandView"
+        - $ref: "#/components/parameters/ShowAirports"
+      responses:
+        "200":
+          description: Base64 PNG map.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /flights/search/advanced:
+    get:
+      tags: [Flights]
+      operationId: searchFlightsAdvanced
+      summary: Search flights with a FlightAware query
+      description: |
+        The web client sends `query` only for a map-bounds search, built as
+        `{range lat min max} {range lon min max} {< alt 500}`, with `max_pages` of 5.
+        Other advanced-search kinds in the client do not produce a query.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: FlightAware advanced-search expression.
+          schema:
+            type: string
+        - name: max_pages
+          in: query
+          required: false
+          description: Page limit. The map-bounds client sends 5.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: A page of flights inside the search.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports:
+    get:
+      tags: [Airports]
+      operationId: listAirports
+      summary: List airports
+      parameters:
+        - $ref: "#/components/parameters/MaxPages"
+      responses:
+        "200":
+          description: A page of airport codes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/nearby:
+    get:
+      tags: [Airports]
+      operationId: listAirportsNearby
+      summary: List airports near a coordinate
+      description: Used when the nearby request has no airport code. Radius defaults to 250.
+      parameters:
+        - $ref: "#/components/parameters/Latitude"
+        - $ref: "#/components/parameters/Longitude"
+        - $ref: "#/components/parameters/Radius"
+        - $ref: "#/components/parameters/OnlyIap"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Nearby airports with distance and direction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportsNearby"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/delays:
+    get:
+      tags: [Airports]
+      operationId: listAirportDelays
+      summary: List airports that are delayed
+      description: The client requests `max_pages` of 5 for the global delay list.
+      parameters:
+        - name: max_pages
+          in: query
+          required: false
+          description: Page limit. The client sends 5.
+          schema:
+            type: integer
+            minimum: 1
+            default: 5
+      responses:
+        "200":
+          description: A page of airport delay statuses.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportDelayList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}:
+    get:
+      tags: [Airports]
+      operationId: getAirport
+      summary: Get one airport
+      description: The web client merges this payload onto the local airport cache.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+      responses:
+        "200":
+          description: Airport record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Airport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/canonical:
+    get:
+      tags: [Airports]
+      operationId: getCanonicalAirport
+      summary: Resolve an airport code to canonical ids
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - name: id_type
+          in: query
+          required: false
+          description: Code system for `{id}`. The client defaults to `icao`.
+          schema:
+            type: string
+            enum: [icao, iata, lid]
+            default: icao
+      responses:
+        "200":
+          description: Canonical airport ids.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanonicalAirportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights:
+    get:
+      tags: [Airports]
+      operationId: listAirportFlights
+      summary: List flights at an airport
+      description: All four flight boards. The client sends `type` of `Airline` and `max_pages` of 1 unless overridden.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/FlightType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Airline"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Arrivals, departures, and scheduled boards.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights/arrivals:
+    get:
+      tags: [Airports]
+      operationId: listAirportArrivals
+      summary: List arrivals at an airport
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/FlightType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Airline"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Arrival board. The client reads `arrivals`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights/departures:
+    get:
+      tags: [Airports]
+      operationId: listAirportDepartures
+      summary: List departures at an airport
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/FlightType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Airline"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Departure board. The client reads `departures`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights/scheduled_arrivals:
+    get:
+      tags: [Airports]
+      operationId: listAirportScheduledArrivals
+      summary: List scheduled arrivals at an airport
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/FlightType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Airline"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Scheduled arrivals. The client reads `scheduled_arrivals`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights/scheduled_departures:
+    get:
+      tags: [Airports]
+      operationId: listAirportScheduledDepartures
+      summary: List scheduled departures at an airport
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/FlightType"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Airline"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Scheduled departures. The client reads `scheduled_departures`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights/counts:
+    get:
+      tags: [Airports]
+      operationId: getAirportFlightCounts
+      summary: Get flight counts at an airport
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+      responses:
+        "200":
+          description: Departed, en route, and scheduled counts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportFlightCounts"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/flights/to/{dest_id}:
+    get:
+      tags: [Airports]
+      operationId: listFlightsBetweenAirports
+      summary: List flights from one airport to another
+      description: |
+        The client defaults `type` to `Airline`, `connection` to `nonstop`, and `max_pages` to 1.
+        `start` and `end` use the same client date window as other airport flight requests.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/DestinationAirportId"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/FlightType"
+        - name: connection
+          in: query
+          required: false
+          description: Connection filter. The client defaults to `nonstop`.
+          schema:
+            type: string
+            enum: [nonstop, onestop]
+            default: nonstop
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Flight segments between the two airports.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlightsBetweenAirports"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/nearby:
+    get:
+      tags: [Airports]
+      operationId: listAirportsNearAirport
+      summary: List airports near another airport
+      description: Used when the nearby request includes an airport code.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/Latitude"
+        - $ref: "#/components/parameters/Longitude"
+        - $ref: "#/components/parameters/Radius"
+        - $ref: "#/components/parameters/OnlyIap"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Nearby airports with distance and direction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportsNearby"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/delays:
+    get:
+      tags: [Airports]
+      operationId: getAirportDelays
+      summary: Get the delay status for one airport
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+      responses:
+        "200":
+          description: Delay status for the airport.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/weather/forecast:
+    get:
+      tags: [Airports]
+      operationId: getAirportForecast
+      summary: Get the weather forecast for an airport
+      description: The client defaults `timestamp` to now and `return_nearby_weather` to true.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/Timestamp"
+        - $ref: "#/components/parameters/ReturnNearbyWeather"
+      responses:
+        "200":
+          description: Raw and decoded forecast.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportForecast"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/weather/observations:
+    get:
+      tags: [Airports]
+      operationId: getAirportObservations
+      summary: Get weather observations for an airport
+      description: |
+        The client defaults `temperature_units` to `F`, `timestamp` to now,
+        `return_nearby_weather` to true, and `max_pages` to 3.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - name: temperature_units
+          in: query
+          required: false
+          description: Temperature unit sent by the client.
+          schema:
+            type: string
+            enum: [C, F, Celsius, Fahrenheit]
+            default: F
+        - $ref: "#/components/parameters/Timestamp"
+        - $ref: "#/components/parameters/ReturnNearbyWeather"
+        - name: max_pages
+          in: query
+          required: false
+          description: Page limit. The client defaults to 3.
+          schema:
+            type: integer
+            minimum: 1
+            default: 3
+      responses:
+        "200":
+          description: A page of observations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportObservations"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /airports/{id}/routes/{dest_id}:
+    get:
+      tags: [Airports]
+      operationId: listRoutesBetweenAirports
+      summary: List filed routes between two airports
+      description: The client defaults `max_pages` to 3. Sort and max file age arguments on the client are not sent.
+      parameters:
+        - $ref: "#/components/parameters/AirportId"
+        - $ref: "#/components/parameters/DestinationAirportId"
+        - name: max_pages
+          in: query
+          required: false
+          description: Page limit. The client defaults to 3.
+          schema:
+            type: integer
+            minimum: 1
+            default: 3
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of filed routes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirportRoutes"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators:
+    get:
+      tags: [Operators]
+      operationId: listOperators
+      summary: List operators
+      parameters:
+        - $ref: "#/components/parameters/MaxPages"
+      responses:
+        "200":
+          description: A page of operator codes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}:
+    get:
+      tags: [Operators]
+      operationId: getOperator
+      summary: Get one operator
+      description: The web client merges this payload onto the local airline cache.
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+      responses:
+        "200":
+          description: Operator record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operator"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}/canonical:
+    get:
+      tags: [Operators]
+      operationId: getCanonicalOperator
+      summary: Resolve an operator code to canonical ids
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+        - name: country_code
+          in: query
+          required: false
+          description: Optional country code used to disambiguate the operator.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Canonical operator ids.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanonicalOperatorResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}/flights:
+    get:
+      tags: [Operators]
+      operationId: listOperatorFlights
+      summary: List flights for an operator
+      description: The client sends `max_pages` of 1. `start` and `end` use the airport-flight date window.
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Arrivals, scheduled flights, and en-route flights.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}/flights/arrivals:
+    get:
+      tags: [Operators]
+      operationId: listOperatorArrivals
+      summary: List arrivals for an operator
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Operator arrivals. The client reads `arrivals`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}/flights/enroute:
+    get:
+      tags: [Operators]
+      operationId: listOperatorEnrouteFlights
+      summary: List en-route flights for an operator
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: En-route flights. The client reads `enroute`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}/flights/scheduled:
+    get:
+      tags: [Operators]
+      operationId: listOperatorScheduledFlights
+      summary: List scheduled flights for an operator
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+        - $ref: "#/components/parameters/MaxPages"
+        - $ref: "#/components/parameters/AirportWindowStart"
+        - $ref: "#/components/parameters/AirportWindowEnd"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Scheduled flights. The client reads `scheduled`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFlights"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /operators/{id}/flights/counts:
+    get:
+      tags: [Operators]
+      operationId: getOperatorFlightCounts
+      summary: Get flight counts for an operator
+      parameters:
+        - $ref: "#/components/parameters/OperatorId"
+      responses:
+        "200":
+          description: Airborne flights and flights in the last 24 hours.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFlightCounts"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /history/aircraft/{registration}/last_flight:
+    get:
+      tags: [History, Aircraft]
+      operationId: getAircraftLastFlight
+      summary: Get the last flight for a registration
+      description: The web client returns the first flight in `flights`, or null when the array is empty.
+      parameters:
+        - name: registration
+          in: path
+          required: true
+          description: Aircraft registration / tail number.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Recent flights for the registration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LastFlightResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /aircraft/{ident}/blocked:
+    get:
+      tags: [Aircraft]
+      operationId: getAircraftBlocked
+      summary: Check whether an aircraft ident is blocked
+      parameters:
+        - $ref: "#/components/parameters/AircraftIdent"
+      responses:
+        "200":
+          description: Blocked flag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /aircraft/{ident}/owner:
+    get:
+      tags: [Aircraft]
+      operationId: getAircraftOwner
+      summary: Get the owner of an aircraft ident
+      parameters:
+        - $ref: "#/components/parameters/AircraftIdent"
+      responses:
+        "200":
+          description: Owner record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AircraftOwnerResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /aircraft/types/{type}:
+    get:
+      tags: [Aircraft]
+      operationId: getAircraftType
+      summary: Get aircraft type information
+      description: The web client merges this payload onto the local aircraft cache by ICAO type code.
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: ICAO aircraft type code, such as `B738`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Aircraft type record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AircraftType"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /disruption_counts/{entity_type}:
+    get:
+      tags: [Disruption]
+      operationId: listDisruptionCounts
+      summary: List disruption counts for an entity type
+      description: |
+        Collection of cancellation and delay counts. The web client requests this
+        with a trailing slash, for example `/disruption_counts/airline/`.
+        `time_period` defaults to `today`. `max_pages` is sent only for this collection.
+      parameters:
+        - $ref: "#/components/parameters/DisruptionEntityType"
+        - $ref: "#/components/parameters/TimePeriod"
+        - $ref: "#/components/parameters/MaxPages"
+      responses:
+        "200":
+          description: A page of disruption entities and national totals.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisruptionCountList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /disruption_counts/{entity_type}/{id}:
+    get:
+      tags: [Disruption]
+      operationId: getDisruptionCounts
+      summary: Get disruption counts for one entity
+      description: |
+        One airline, origin, or destination. The client does not send `max_pages` on this call.
+        `time_period` defaults to `today`.
+      parameters:
+        - $ref: "#/components/parameters/DisruptionEntityType"
+        - name: id
+          in: path
+          required: true
+          description: Entity id, such as an airline or airport code.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TimePeriod"
+      responses:
+        "200":
+          description: Disruption counts for the entity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisruptionEntity"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: x-apikey
+      description: FlightAware AeroAPI key. The client refuses to send a request when this is empty.
+  parameters:
+    FlightIdent:
+      name: ident
+      in: path
+      required: true
+      description: Flight ident or FlightAware flight id, depending on `ident_type`.
+      schema:
+        type: string
+    FaFlightId:
+      name: id
+      in: path
+      required: true
+      description: |
+        FlightAware flight id, shaped like `UAL1-1700000000-fa-1`. The embedded unix
+        timestamp selects live versus `/history` routes for track, route, and map.
+      schema:
+        type: string
+    AirportId:
+      name: id
+      in: path
+      required: true
+      description: Airport code. ICAO, IATA, or LID, depending on the call.
+      schema:
+        type: string
+    DestinationAirportId:
+      name: dest_id
+      in: path
+      required: true
+      description: Destination airport code.
+      schema:
+        type: string
+    OperatorId:
+      name: id
+      in: path
+      required: true
+      description: Operator code. ICAO or IATA.
+      schema:
+        type: string
+    AircraftIdent:
+      name: ident
+      in: path
+      required: true
+      description: Aircraft ident or registration.
+      schema:
+        type: string
+    DisruptionEntityType:
+      name: entity_type
+      in: path
+      required: true
+      description: Kind of entity the counts are grouped by.
+      schema:
+        type: string
+        enum: [airline, origin, destination]
+    IdentType:
+      name: ident_type
+      in: query
+      required: false
+      description: How to interpret `{ident}`. The client defaults to `designator` for ident lookups and sends `fa_flight_id` for a raw FlightAware id.
+      schema:
+        type: string
+        enum: [designator, fa_flight_id, registration]
+        default: designator
+    MaxPages:
+      name: max_pages
+      in: query
+      required: false
+      description: Maximum number of result pages to walk. Many client calls send 1.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Pagination cursor from `links.next`.
+      schema:
+        type: string
+    WindowStart:
+      name: start
+      in: query
+      required: false
+      description: Window start, `yyyy-MM-dd'T'HH:mm:ss'Z'`. Not range-checked on flight ident lookups.
+      schema:
+        type: string
+        format: date-time
+    WindowEnd:
+      name: end
+      in: query
+      required: false
+      description: Window end, `yyyy-MM-dd'T'HH:mm:ss'Z'`. Not range-checked on flight ident lookups.
+      schema:
+        type: string
+        format: date-time
+    AirportWindowStart:
+      name: start
+      in: query
+      required: false
+      description: |
+        Window start, `yyyy-MM-dd'T'HH:mm:ss'Z'`. The client requires start before end,
+        start no more than seven 84600-second days before now, and end no more than
+        two 84600-second days after now.
+      schema:
+        type: string
+        format: date-time
+    AirportWindowEnd:
+      name: end
+      in: query
+      required: false
+      description: Window end. See `start` for the client date window.
+      schema:
+        type: string
+        format: date-time
+    FlightType:
+      name: type
+      in: query
+      required: false
+      description: Flight category. The client defaults to `Airline`.
+      schema:
+        type: string
+        enum: [Airline, General_Aviation]
+        default: Airline
+    Airline:
+      name: airline
+      in: query
+      required: false
+      description: Optional airline filter on an airport flight board.
+      schema:
+        type: string
+    IncludeEstimatedPositions:
+      name: include_estimated_positions
+      in: query
+      required: false
+      description: Include estimated positions in the track. The client defaults to false.
+      schema:
+        type: boolean
+        default: false
+    MapHeight:
+      name: height
+      in: query
+      required: false
+      description: Map height in pixels. Integer from 1 to 1500. The client defaults to 480.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1500
+        default: 480
+    MapWidth:
+      name: width
+      in: query
+      required: false
+      description: Map width in pixels. Integer from 1 to 1500. The client defaults to 640.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1500
+        default: 640
+    LayerOn:
+      name: layer_on
+      in: query
+      required: false
+      description: Map layers to enable. Repeated once per layer.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          $ref: "#/components/schemas/MapLayer"
+    LayerOff:
+      name: layer_off
+      in: query
+      required: false
+      description: Map layers to disable. Repeated once per layer.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          $ref: "#/components/schemas/MapLayer"
+    ShowDataBlock:
+      name: show_data_block
+      in: query
+      required: false
+      description: Draw the flight data block on the map.
+      schema:
+        type: boolean
+    AirportsExpandView:
+      name: airports_expand_view
+      in: query
+      required: false
+      description: Expand the map to include airports.
+      schema:
+        type: boolean
+    ShowAirports:
+      name: show_airports
+      in: query
+      required: false
+      description: Show airports on the map.
+      schema:
+        type: boolean
+    Latitude:
+      name: latitude
+      in: query
+      required: false
+      description: Latitude for a coordinate nearby search.
+      schema:
+        type: number
+        format: double
+    Longitude:
+      name: longitude
+      in: query
+      required: false
+      description: Longitude for a coordinate nearby search.
+      schema:
+        type: number
+        format: double
+    Radius:
+      name: radius
+      in: query
+      required: false
+      description: Search radius. The client defaults to 250.
+      schema:
+        type: number
+        default: 250
+    OnlyIap:
+      name: only_iap
+      in: query
+      required: false
+      description: Limit results to airports with instrument approaches. The client defaults to false.
+      schema:
+        type: boolean
+        default: false
+    Timestamp:
+      name: timestamp
+      in: query
+      required: false
+      description: Observation or forecast time, `yyyy-MM-dd'T'HH:mm:ss'Z'`. The client defaults to now.
+      schema:
+        type: string
+        format: date-time
+    ReturnNearbyWeather:
+      name: return_nearby_weather
+      in: query
+      required: false
+      description: Include weather from a nearby station. The client defaults to true.
+      schema:
+        type: boolean
+        default: true
+    TimePeriod:
+      name: time_period
+      in: query
+      required: false
+      description: Disruption window. The client defaults to `today`.
+      schema:
+        type: string
+        enum:
+          - yesterday
+          - today
+          - tomorrow
+          - plus2days
+          - twoDaysAgo
+          - minus2plus12hrs
+          - next36hrs
+          - week
+        default: today
+  responses:
+    BadRequest:
+      description: The request was rejected. The client surfaces the status and raw body.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or rejected `x-apikey`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The ident, airport, operator, or flight id was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: Rate limit from FlightAware.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      description: Error body stored as text by the client. Fields match the shape FlightAware returns when the body is JSON.
+      properties:
+        title:
+          type: string
+        reason:
+          type: string
+        detail:
+          type: string
+        status:
+          type: integer
+    PageLinks:
+      type: object
+      description: Pagination links. The client reads `next`.
+      properties:
+        next:
+          type: string
+      additionalProperties:
+        type: string
+    FlightAirport:
+      type: object
+      properties:
+        code:
+          type: string
+        code_icao:
+          type: string
+        code_iata:
+          type: string
+        code_lid:
+          type: string
+        airport_info_url:
+          type: string
+    LastPosition:
+      type: object
+      properties:
+        fa_flight_id:
+          type: string
+        altitude:
+          type: number
+        altitude_change:
+          type: string
+          description: "`-`, `C` (climb), or `D` (descent)."
+        groundspeed:
+          type: number
+        heading:
+          type: number
+        latitude:
+          type: number
+        longitude:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        update_type:
+          type: string
+    Flight:
+      type: object
+      properties:
+        ident:
+          type: string
+        ident_icao:
+          type: string
+        ident_iata:
+          type: string
+        fa_flight_id:
+          type: string
+          example: UAL1-1700000000-fa-1
+        operator_icao:
+          type: string
+        operator_iata:
+          type: string
+        flight_number:
+          type: string
+        registration:
+          type: string
+        atc_ident:
+          type: string
+        inbound_fa_flight_id:
+          type: string
+        codeshares:
+          type: array
+          items:
+            type: string
+        codeshares_iata:
+          type: array
+          items:
+            type: string
+        blocked:
+          type: boolean
+        diverted:
+          type: boolean
+        cancelled:
+          type: boolean
+        position_only:
+          type: boolean
+        origin:
+          $ref: "#/components/schemas/FlightAirport"
+        destination:
+          $ref: "#/components/schemas/FlightAirport"
+        departure_delay:
+          type: integer
+        arrival_delay:
+          type: integer
+        filed_ete:
+          type: integer
+          description: Filed estimated time en route, in seconds.
+        scheduled_out:
+          type: string
+          format: date-time
+        estimated_out:
+          type: string
+          format: date-time
+        actual_out:
+          type: string
+          format: date-time
+        scheduled_off:
+          type: string
+          format: date-time
+        estimated_off:
+          type: string
+          format: date-time
+        actual_off:
+          type: string
+          format: date-time
+        scheduled_on:
+          type: string
+          format: date-time
+        estimated_on:
+          type: string
+          format: date-time
+        actual_on:
+          type: string
+          format: date-time
+        scheduled_in:
+          type: string
+          format: date-time
+        estimated_in:
+          type: string
+          format: date-time
+        actual_in:
+          type: string
+          format: date-time
+        progress_percent:
+          type: number
+        status:
+          type: string
+        aircraft_type:
+          type: string
+        route_distance:
+          type: number
+        filed_airspeed:
+          type: number
+        filed_altitude:
+          type: number
+        route:
+          type: string
+        baggage_claim:
+          type: string
+        seats_cabin_business:
+          type: integer
+        seats_cabin_coach:
+          type: integer
+        seats_cabin_first:
+          type: integer
+        gate_origin:
+          type: string
+        gate_destination:
+          type: string
+        terminal_origin:
+          type: string
+        terminal_destination:
+          type: string
+        type:
+          type: string
+        last_position:
+          $ref: "#/components/schemas/LastPosition"
+        updated:
+          type: string
+          format: date-time
+    FlightPage:
+      type: object
+      properties:
+        num_pages:
+          type: integer
+        flights:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    CanonicalFlightIdent:
+      type: object
+      required: [ident, ident_type]
+      properties:
+        ident:
+          type: string
+        ident_type:
+          type: string
+          enum: [designator, fa_flight_id, registration]
+    CanonicalFlightIdResponse:
+      type: object
+      required: [idents]
+      properties:
+        idents:
+          type: array
+          items:
+            $ref: "#/components/schemas/CanonicalFlightIdent"
+    FlightPositionAirport:
+      type: object
+      properties:
+        code:
+          type: string
+        code_icao:
+          type: string
+        code_iata:
+          type: string
+        code_lid:
+          type: string
+        timezone:
+          type: string
+        name:
+          type: string
+        city:
+          type: string
+        airport_info_url:
+          type: string
+    FlightPosition:
+      type: object
+      properties:
+        ident:
+          type: string
+        ident_icao:
+          type: string
+        ident_iata:
+          type: string
+        fa_flight_id:
+          type: string
+        origin:
+          $ref: "#/components/schemas/FlightPositionAirport"
+        destination:
+          $ref: "#/components/schemas/FlightPositionAirport"
+        waypoints:
+          type: array
+          items:
+            type: number
+        first_position_time:
+          type: string
+          format: date-time
+        last_position:
+          $ref: "#/components/schemas/LastPosition"
+        bounding_box:
+          type: array
+          items:
+            type: number
+        ident_prefix:
+          type: string
+        aircraft_type:
+          type: string
+        foresight_predictions_available:
+          type: boolean
+        actual_off:
+          type: string
+          format: date-time
+        actual_on:
+          type: string
+          format: date-time
+        predicted_out:
+          type: string
+          format: date-time
+        predicted_off:
+          type: string
+          format: date-time
+        predicted_on:
+          type: string
+          format: date-time
+        predicted_in:
+          type: string
+          format: date-time
+        predicted_out_source:
+          type: string
+        predicted_off_source:
+          type: string
+        predicted_on_source:
+          type: string
+        predicted_in_source:
+          type: string
+    FlightFix:
+      type: object
+      properties:
+        name:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        distance_from_origin:
+          type: number
+        distance_this_leg:
+          type: number
+        distance_to_destination:
+          type: number
+        outbound_course:
+          type: number
+        type:
+          type: string
+    FlightRoute:
+      type: object
+      properties:
+        route_distance:
+          type: string
+        fixes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlightFix"
+    FlightTrackPoint:
+      type: object
+      properties:
+        fa_flight_id:
+          type: string
+        altitude:
+          type: number
+        altitude_change:
+          type: string
+        groundspeed:
+          type: number
+        heading:
+          type: number
+        latitude:
+          type: number
+        longitude:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        update_type:
+          type: string
+    FlightTrackResponse:
+      type: object
+      properties:
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlightTrackPoint"
+    MapResponse:
+      type: object
+      required: [map]
+      properties:
+        map:
+          type: string
+          description: Base64-encoded PNG.
+    MapLayer:
+      type: string
+      enum:
+        - US Cities
+        - european country boundaries
+        - asia country boundaries
+        - major airports
+        - country boundaries
+        - US state boundaries
+        - water
+        - US major roads
+        - radar
+        - track
+        - flights
+        - airports
+    AirportSummary:
+      type: object
+      properties:
+        code:
+          type: string
+        airport_info_url:
+          type: string
+    AirportList:
+      type: object
+      properties:
+        airports:
+          type: array
+          items:
+            $ref: "#/components/schemas/AirportSummary"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    Airport:
+      type: object
+      properties:
+        airport_code:
+          type: string
+        code_icao:
+          type: string
+        code_iata:
+          type: string
+        code_lid:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          description: Airport, Heliport, Seaplane Base, Balloonport, Ultralight, Gliderport, or Stolport.
+        elevation:
+          type: number
+        city:
+          type: string
+        state:
+          type: string
+        country_code:
+          type: string
+        timezone:
+          type: string
+        longitude:
+          type: number
+        latitude:
+          type: number
+        url:
+          type: string
+        wiki_url:
+          type: string
+        airport_flights_url:
+          type: string
+        alternatives:
+          type: array
+          items:
+            $ref: "#/components/schemas/Airport"
+        facebook:
+          type: string
+        twitter:
+          type: string
+        instagram:
+          type: string
+        youtube:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+    CanonicalAirportId:
+      type: object
+      required: [id, id_type]
+      properties:
+        id:
+          type: string
+        id_type:
+          type: string
+          enum: [icao, iata, lid]
+    CanonicalAirportResponse:
+      type: object
+      required: [airports]
+      properties:
+        airports:
+          type: array
+          items:
+            $ref: "#/components/schemas/CanonicalAirportId"
+    AirportFlights:
+      type: object
+      properties:
+        scheduled_arrivals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        scheduled_departures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        arrivals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        departures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        links:
+          $ref: "#/components/schemas/PageLinks"
+        num_pages:
+          type: integer
+    AirportFlightCounts:
+      type: object
+      properties:
+        departed:
+          type: integer
+        enroute:
+          type: integer
+        scheduled_arrivals:
+          type: integer
+        scheduled_departures:
+          type: integer
+    FlightSegment:
+      type: object
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+    FlightsBetweenAirports:
+      type: object
+      properties:
+        flights:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlightSegment"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    AirportNearby:
+      allOf:
+        - $ref: "#/components/schemas/Airport"
+        - type: object
+          properties:
+            distance:
+              type: number
+            heading:
+              type: number
+            direction:
+              type: string
+              description: N, E, S, W, NE, SE, SW, or NW.
+    AirportsNearby:
+      type: object
+      properties:
+        airports:
+          type: array
+          items:
+            $ref: "#/components/schemas/AirportNearby"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    DelayReason:
+      type: object
+      properties:
+        category:
+          type: string
+        color:
+          type: string
+          enum: [red, yellow, green]
+        delay_secs:
+          type: integer
+        reason:
+          type: string
+    AirportStatus:
+      type: object
+      properties:
+        airport:
+          type: string
+        category:
+          type: string
+        color:
+          type: string
+          enum: [red, yellow, green]
+        delay_secs:
+          type: integer
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/DelayReason"
+    AirportDelayList:
+      type: object
+      properties:
+        delays:
+          type: array
+          items:
+            $ref: "#/components/schemas/AirportStatus"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    ObservedClouds:
+      type: object
+      properties:
+        altitude:
+          type: number
+        symbol:
+          type: string
+        type:
+          type: string
+    WeatherObservation:
+      type: object
+      properties:
+        airport_code:
+          type: string
+        cloud_friendly:
+          type: string
+        clouds:
+          type: array
+          items:
+            $ref: "#/components/schemas/ObservedClouds"
+        conditions:
+          type: string
+        pressure:
+          type: number
+        pressure_units:
+          type: string
+        raw_data:
+          type: string
+        temp_air:
+          type: number
+        temp_dewpoint:
+          type: number
+        temp_perceived:
+          type: number
+        relative_humidity:
+          type: number
+        time:
+          type: string
+          format: date-time
+        visibility:
+          type: number
+        visibility_units:
+          type: string
+        wind_direction:
+          type: number
+        wind_friendly:
+          type: string
+        wind_speed:
+          type: number
+        wind_speed_gust:
+          type: number
+        wind_units:
+          type: string
+    AirportObservations:
+      type: object
+      properties:
+        observations:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherObservation"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    ForecastWinds:
+      type: object
+      properties:
+        symbol:
+          type: string
+        direction:
+          type: string
+        speed:
+          type: number
+        units:
+          type: string
+        peak_gusts:
+          type: number
+    ForecastClouds:
+      type: object
+      properties:
+        symbol:
+          type: string
+        coverage:
+          type: string
+        altitude:
+          type: string
+        special:
+          type: string
+    ForecastVisibility:
+      type: object
+      properties:
+        symbol:
+          type: string
+        visibility:
+          type: string
+        units:
+          type: string
+    ForecastLine:
+      type: object
+      properties:
+        type:
+          type: string
+        start:
+          type: string
+        end:
+          type: string
+        turbulence_layers:
+          type: string
+        icing_layers:
+          type: string
+        barometric_pressure:
+          type: number
+        significant_weather:
+          type: string
+        winds:
+          $ref: "#/components/schemas/ForecastWinds"
+        visibility:
+          $ref: "#/components/schemas/ForecastVisibility"
+        clouds:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastClouds"
+    DecodedForecast:
+      type: object
+      properties:
+        start:
+          type: string
+        end:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastLine"
+    AirportForecast:
+      type: object
+      properties:
+        airport_code:
+          type: string
+        raw_forecast:
+          type: array
+          items:
+            type: string
+        time:
+          type: string
+          format: date-time
+        decoded_forecast:
+          $ref: "#/components/schemas/DecodedForecast"
+    AirportRoute:
+      type: object
+      properties:
+        aircraft_types:
+          type: array
+          items:
+            type: string
+        count:
+          type: integer
+        filed_altitude_max:
+          type: integer
+        filed_altitude_min:
+          type: integer
+        last_departure_time:
+          type: string
+          format: date-time
+        route:
+          type: string
+        route_distance:
+          type: string
+    AirportRoutes:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AirportRoute"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    OperatorSummary:
+      type: object
+      properties:
+        code:
+          type: string
+        operator_info_url:
+          type: string
+    OperatorList:
+      type: object
+      properties:
+        operators:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorSummary"
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"
+    Operator:
+      type: object
+      properties:
+        icao:
+          type: string
+        iata:
+          type: string
+        name:
+          type: string
+        callsign:
+          type: string
+        country:
+          type: string
+        location:
+          type: string
+        phone:
+          type: string
+        shortname:
+          type: string
+        url:
+          type: string
+        wiki_url:
+          type: string
+        alternatives:
+          type: array
+          items:
+            $ref: "#/components/schemas/Operator"
+        active:
+          type: boolean
+        operates:
+          type: string
+        facebook:
+          type: string
+        twitter:
+          type: string
+        instagram:
+          type: string
+        youtube:
+          type: string
+        reservations:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        loyalty:
+          type: string
+        ally:
+          type: string
+    CanonicalOperatorId:
+      type: object
+      required: [id, id_type]
+      properties:
+        id:
+          type: string
+        id_type:
+          type: string
+          enum: [icao, iata]
+    CanonicalOperatorResponse:
+      type: object
+      required: [operators]
+      properties:
+        operators:
+          type: array
+          items:
+            $ref: "#/components/schemas/CanonicalOperatorId"
+    OperatorFlights:
+      type: object
+      properties:
+        arrivals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        scheduled:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        enroute:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        links:
+          $ref: "#/components/schemas/PageLinks"
+        num_pages:
+          type: integer
+    OperatorFlightCounts:
+      type: object
+      properties:
+        airborne:
+          type: integer
+        flights_last_24_hours:
+          type: integer
+    LastFlightResponse:
+      type: object
+      properties:
+        flights:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+    BlockedResponse:
+      type: object
+      required: [blocked]
+      properties:
+        blocked:
+          type: boolean
+    AircraftOwner:
+      type: object
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        location2:
+          type: string
+        website:
+          type: string
+    AircraftOwnerResponse:
+      type: object
+      properties:
+        owner:
+          $ref: "#/components/schemas/AircraftOwner"
+    AircraftType:
+      type: object
+      properties:
+        name:
+          type: string
+        iata:
+          type: string
+        ident:
+          type: string
+        manufacturer:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        engine_count:
+          type: integer
+        engine_type:
+          type: string
+        cruise:
+          type: number
+        range:
+          type: number
+    DisruptionEntity:
+      type: object
+      properties:
+        cancellations:
+          type: integer
+        delays:
+          type: integer
+        total:
+          type: integer
+        entity_name:
+          type: string
+        entity_id:
+          type: string
+    DisruptionCountList:
+      type: object
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/DisruptionEntity"
+        total_cancellations_national:
+          type: integer
+        total_cancellations_worldwide:
+          type: integer
+        total_delays_worldwide:
+          type: integer
+        num_pages:
+          type: integer
+        links:
+          $ref: "#/components/schemas/PageLinks"

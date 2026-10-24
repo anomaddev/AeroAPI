@@ -42,3 +42,15 @@ const page = await AeroAPI.manager.getFlightData(
 ```
 
 The web client uses the Swift method names (`getFlightData`, `getAirportInfo`, `getMap`, and the rest of the async surface). It calls `https://aeroapi.flightaware.com/aeroapi` with the `x-apikey` header. Details are in `packages/aeroapi-web/README.md`.
+
+## Documentation
+
+The Swift reference is the Jazzy site in `docs/`. The HTTP contract both clients call is an OpenAPI document rendered with Redoc:
+
+- Source: `docs/http/openapi.yaml`
+- Local page: `docs/http/index.html`
+- GitHub Pages: [https://anomaddev.github.io/AeroAPI/http/](https://anomaddev.github.io/AeroAPI/http/)
+
+Pages publishes the whole `docs/` directory from GitHub Actions (`.github/workflows/pages.yml`). In the repository settings, set Pages source to **GitHub Actions** once. The workflow cannot turn that setting on.
+
+Licensed under the MIT license. See `LICENSE`.
