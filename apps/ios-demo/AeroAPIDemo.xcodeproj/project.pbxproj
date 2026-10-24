@@ -45,7 +45,7 @@
 		51EE6BDE2AC2BA0300DE1324 /* AeroAPIDemoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AeroAPIDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		51EE6BE22AC2BA0300DE1324 /* AeroAPIDemoUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AeroAPIDemoUITests.swift; sourceTree = "<group>"; };
 		51EE6BE42AC2BA0300DE1324 /* AeroAPIDemoUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AeroAPIDemoUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		51EE6BF22AC2BA1600DE1324 /* AeroAPI */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = AeroAPI; path = ..; sourceTree = "<group>"; };
+		51EE6BF22AC2BA1600DE1324 /* AeroAPI */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = AeroAPI; path = ../..; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
