@@ -1,0 +1,15 @@
+{
+  "name": "aeroapi",
+  "private": true,
+  "description": "Monorepo for the AeroAPI iOS Swift package and web client",
+  "workspaces": [
+    "packages/aeroapi-web"
+  ],
+  "scripts": {
+    "build": "npm run build -w aeroapi-web",
+    "test": "npm test -w aeroapi-web"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
