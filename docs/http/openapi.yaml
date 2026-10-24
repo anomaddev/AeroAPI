@@ -1,16 +1,16 @@
 openapi: 3.0.3
 info:
   title: AeroAPI HTTP reference
-  version: 0.1.0
+  version: 0.5.0
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
   description: |
-    HTTP contract called by the Swift `AeroAPI` package and the `aeroapi-web` client.
+    HTTP contract called by the Swift `AeroAPI` package and the `aeroapi` npm client.
     Both send `GET` requests to FlightAware AeroAPI with the `x-apikey` header.
 
     Timestamps use `yyyy-MM-dd'T'HH:mm:ss'Z'`. JSON property names in this document are
-    the snake_case fields on the wire. `aeroapi-web` camelizes those keys after decode.
+    the snake_case fields on the wire. `aeroapi` camelizes those keys after decode.
 
     This covers the paths the clients build. It does not cover the rest of FlightAware AeroAPI.
     `ScheduledFlightRequest` is omitted because its path is empty and it does not call AeroAPI.

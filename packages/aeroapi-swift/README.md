@@ -7,12 +7,12 @@ iOS and macOS client for the FlightAware AeroAPI. The Swift package manifest sta
 In a `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/anomaddev/AeroAPI-Swift.git", branch: "main")
+.package(url: "https://github.com/anomaddev/AeroAPI.git", from: "0.5.0")
 ```
 
 In Xcode: File → Add Package Dependencies, then use the repository URL above.
 
-The package depends on a sibling checkout of [NomadUtilities](https://github.com/anomaddev/NomadUtilities) at `../NomadUtilities`, plus Alamofire, ZippyJSON, SwiftDate, and Defaults.
+The package depends on [NomadUtilities](https://github.com/anomaddev/NomadUtilities) 0.1.0+, plus Alamofire, ZippyJSON, SwiftDate, and Defaults.
 
 ## API key
 

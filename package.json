@@ -1,5 +1,5 @@
 {
-  "name": "aeroapi",
+  "name": "aeroapi-monorepo",
   "private": true,
   "description": "Monorepo for the AeroAPI iOS Swift package and web client",
   "license": "MIT",
@@ -7,8 +7,8 @@
     "packages/aeroapi-web"
   ],
   "scripts": {
-    "build": "npm run build -w aeroapi-web",
-    "test": "npm test -w aeroapi-web"
+    "build": "npm run build -w aeroapi",
+    "test": "npm test -w aeroapi"
   },
   "engines": {
     "node": ">=18"

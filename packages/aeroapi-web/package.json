@@ -1,8 +1,13 @@
 {
-  "name": "aeroapi-web",
-  "version": "0.1.0",
+  "name": "aeroapi",
+  "version": "0.5.0",
   "description": "FlightAware AeroAPI client for browsers and Node.js",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anomaddev/AeroAPI.git",
+    "directory": "packages/aeroapi-web"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,5 +30,8 @@
   "devDependencies": {
     "@types/node": "^22.9.0",
     "typescript": "^5.6.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
